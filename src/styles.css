@@ -32,14 +32,19 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(ellipse at 50% -15%, #302047 0%, transparent 48%),
+    radial-gradient(
+      ellipse at 50% -15%,
+      #302047 0%,
+      transparent 48%
+    ),
     var(--background);
   color: var(--foreground);
 }
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -49,16 +54,21 @@ button {
 
 button:focus-visible,
 input:focus-visible,
-textarea:focus-visible {
+textarea:focus-visible,
+select:focus-visible {
   outline: 2px solid #a78bfa;
   outline-offset: 3px;
 }
+
+/* Main application wrapper */
 
 .studio {
   width: min(1440px, 100%);
   margin: 0 auto;
   padding: 0 42px;
 }
+
+/* Header */
 
 .topbar {
   display: flex;
@@ -124,6 +134,8 @@ textarea:focus-visible {
   box-shadow: 0 0 12px #a78bfa;
 }
 
+/* Hero section */
+
 .hero {
   max-width: 700px;
   margin: 72px auto 55px;
@@ -148,7 +160,11 @@ textarea:focus-visible {
 
 .hero h1 span {
   color: #c4b5fd;
-  background: linear-gradient(100deg, #a78bfa, #e9a8fa);
+  background: linear-gradient(
+    100deg,
+    #a78bfa,
+    #e9a8fa
+  );
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -162,9 +178,13 @@ textarea:focus-visible {
   line-height: 1.9;
 }
 
+/* Workspace layout */
+
 .workspace {
   display: grid;
-  grid-template-columns: minmax(280px, 370px) minmax(0, 1fr);
+  grid-template-columns:
+    minmax(280px, 370px)
+    minmax(0, 1fr);
   align-items: start;
   gap: 24px;
 }
@@ -173,9 +193,15 @@ textarea:focus-visible {
   min-width: 0;
   border: 1px solid var(--border);
   border-radius: 18px;
-  background: linear-gradient(145deg, #191523, #12101a);
+  background: linear-gradient(
+    145deg,
+    #191523,
+    #12101a
+  );
   box-shadow: 0 18px 60px #00000018;
 }
+
+/* Panel headings */
 
 .editor {
   padding: 24px;
@@ -211,6 +237,8 @@ textarea:focus-visible {
   background: #a78bfa18;
 }
 
+/* Image upload */
+
 .upload-zone {
   display: flex;
   width: 100%;
@@ -224,7 +252,9 @@ textarea:focus-visible {
   border-radius: 13px;
   background: #a78bfa08;
   color: var(--foreground);
-  transition: background 180ms ease, border-color 180ms ease;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease;
 }
 
 .upload-zone:hover {
@@ -250,6 +280,8 @@ textarea:focus-visible {
   color: var(--muted-foreground);
   font-size: 10px;
 }
+
+/* Form fields */
 
 .field {
   display: block;
@@ -278,7 +310,8 @@ textarea:focus-visible {
 }
 
 .field input:focus,
-.field textarea:focus {
+.field textarea:focus,
+.field select:focus {
   border-color: #8b72c9;
 }
 
@@ -286,6 +319,18 @@ textarea:focus-visible {
   resize: vertical;
   line-height: 1.6;
 }
+
+.field select {
+  width: 100%;
+  padding: 12px 13px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #0e0c15;
+  color: var(--foreground);
+  font-size: 12px;
+}
+
+/* Accent color picker */
 
 .color-picker {
   display: flex;
@@ -314,6 +359,8 @@ textarea:focus-visible {
   letter-spacing: 1px;
 }
 
+/* Export button */
+
 .primary-button {
   display: flex;
   width: 100%;
@@ -322,19 +369,32 @@ textarea:focus-visible {
   justify-content: center;
   gap: 10px;
   margin-top: 27px;
+  padding: 12px;
   border: 0;
   border-radius: 11px;
-  background: linear-gradient(100deg, #a78bfa, #c4a2fa);
+  background: linear-gradient(
+    100deg,
+    #a78bfa,
+    #c4a2fa
+  );
   color: #171020;
   font-size: 13px;
   font-weight: 800;
   box-shadow: 0 8px 25px #a78bfa20;
-  transition: transform 180ms ease, filter 180ms ease;
+  transition:
+    transform 180ms ease,
+    filter 180ms ease;
 }
 
-.primary-button:hover {
+.primary-button:hover:not(:disabled) {
   transform: translateY(-1px);
   filter: brightness(1.08);
+}
+
+.primary-button:disabled,
+.secondary-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 
 .helper {
@@ -345,7 +405,10 @@ textarea:focus-visible {
   text-align: center;
 }
 
+/* Preview panel */
+
 .preview-panel {
+  min-width: 0;
   padding: 24px;
 }
 
@@ -372,8 +435,15 @@ textarea:focus-visible {
   border: 1px solid #ffffff0c;
   border-radius: 13px;
   background:
-    linear-gradient(#ffffff05 1px, transparent 1px),
-    linear-gradient(90deg, #ffffff05 1px, transparent 1px),
+    linear-gradient(
+      #ffffff05 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      #ffffff05 1px,
+      transparent 1px
+    ),
     #0b0911;
   background-size: 24px 24px;
 }
@@ -402,7 +472,11 @@ textarea:focus-visible {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  background: linear-gradient(135deg, #171321, #241a35);
+  background: linear-gradient(
+    135deg,
+    #171321,
+    #241a35
+  );
   color: #a78bfa;
   pointer-events: none;
 }
@@ -422,6 +496,15 @@ textarea:focus-visible {
   text-align: center;
 }
 
+.source-card a,
+.preview-note a {
+  color: #c4b5fd;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Footer */
+
 footer {
   display: flex;
   justify-content: space-between;
@@ -434,6 +517,74 @@ footer {
   font-weight: 800;
   letter-spacing: 1.2px;
 }
+
+/* Metadata search */
+
+.metadata-search {
+  margin-top: 22px;
+  padding: 15px;
+  border: 1px solid #3a2d50;
+  border-radius: 13px;
+  background: #a78bfa08;
+}
+
+.secondary-button {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin-top: 18px;
+  padding: 10px;
+  border: 1px solid #705a9d;
+  border-radius: 10px;
+  background: #a78bfa18;
+  color: #e5d9ff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.secondary-button:hover:not(:disabled) {
+  background: #a78bfa2a;
+}
+
+.source-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 14px;
+  padding: 13px;
+  border: 1px solid #3c604c;
+  border-radius: 10px;
+  background: #17302255;
+  color: #ccebd6;
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(0, 1fr);
+  gap: 12px;
+}
+
+/* Loading animation */
+
+.spin {
+  animation: frameforge-spin 1s linear infinite;
+}
+
+@keyframes frameforge-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Tablet layout */
 
 @media (max-width: 850px) {
   .studio {
@@ -452,6 +603,8 @@ footer {
     min-height: 280px;
   }
 }
+
+/* Mobile layout */
 
 @media (max-width: 480px) {
   .studio {
@@ -510,5 +663,14 @@ footer {
   footer {
     font-size: 8px;
     letter-spacing: 0.5px;
+  }
+
+  .field-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .metadata-search {
+    padding: 12px;
   }
   }
