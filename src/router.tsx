@@ -10,6 +10,7 @@ export const getRouter = () => {
     context: {
       queryClient,
     },
+    basepath: "/FrameForge",
     scrollRestoration: true,
     defaultPreload: "intent",
   });
