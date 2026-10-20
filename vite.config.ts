@@ -10,11 +10,4 @@ export default defineConfig({
     tailwindcss(),
     tsconfigPaths(),
   ],
-  build: {
-    outDir: "dist",
-    emptyOutDir: true,
-  },
-  resolve: {
-    dedupe: ["react", "react-dom"],
-  },
 });
