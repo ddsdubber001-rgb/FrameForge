@@ -1,35 +1,140 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useRef, useState } from "react";
 import {
-  Upload,
-  Image as ImageIcon,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
+import {
   Download,
   Film,
+  Image as ImageIcon,
+  LoaderCircle,
   RotateCcw,
+  Search,
+  Upload,
 } from "lucide-react";
+import { toast } from "sonner";
+import { searchMetadata } from "../services/api";
+import { drawPoster, exportPosterPng } from "../utils/canvas";
+import type { MediaKind, PosterMetadata } from "../types";
+
+const initialState = {
+  image: null as string | null,
+  title: "YOUR TITLE",
+  subtitle: "A CINEMATIC MASTERPIECE",
+  description: "A new adventure begins.",
+  accent: "#a78bfa",
+  rating: "",
+  genres: "",
+  status: "",
+  seasons: "",
+  language: "",
+  year: "",
+};
 
 function Studio() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const [image, setImage] = useState<string | null>(null);
-  const [title, setTitle] = useState("YOUR TITLE");
-  const [subtitle, setSubtitle] = useState("A CINEMATIC MASTERPIECE");
-  const [description, setDescription] = useState(
-    "A new adventure begins.",
+  const [poster, setPoster] = useState(initialState);
+  const [query, setQuery] = useState("");
+  const [kind, setKind] = useState<MediaKind>("anime");
+  const [loading, setLoading] = useState(false);
+  const [previewReady, setPreviewReady] = useState(false);
+  const [metadata, setMetadata] = useState<PosterMetadata | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  const canvasOptions = useMemo(
+    () => ({
+      image: poster.image,
+      title: poster.title,
+      subtitle: poster.subtitle,
+      description: poster.description,
+      accent: poster.accent,
+      rating: poster.rating,
+      genres: poster.genres,
+      status: poster.status,
+      seasons: poster.seasons,
+      language: poster.language,
+      year: poster.year,
+    }),
+    [poster],
   );
-  const [accent, setAccent] = useState("#a78bfa");
 
-  function uploadImage(file?: File) {
-    if (!file) return;
+  // Live poster preview.
+  useEffect(() => {
+    const canvas = canvasRef.current;
 
-    if (!file.type.startsWith("image/")) {
-      alert("Please select an image file.");
+    if (!canvas) {
       return;
     }
 
-    if (file.size > 25 * 1024 * 1024) {
-      alert("Image size must be 25 MB or less.");
+    let cancelled = false;
+
+    drawPoster(canvas, canvasOptions)
+      .then(() => {
+        if (!cancelled) {
+          setPreviewReady(true);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "Preview could not be rendered.",
+          );
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canvasOptions]);
+
+  function updatePoster<K extends keyof typeof initialState>(
+    key: K,
+    value: (typeof initialState)[K],
+  ) {
+    setPoster((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
+
+  // Upload a local background image.
+  function uploadImage(file?: File) {
+    if (!file) {
+      return;
+    }
+
+    const allowedTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Choose a JPG, PNG or WEBP image.");
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+
+      return;
+    }
+
+    const maximumSize = 25 * 1024 * 1024;
+
+    if (file.size > maximumSize) {
+      toast.error("Image size must be 25 MB or less.");
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+
       return;
     }
 
@@ -37,136 +142,128 @@ function Studio() {
 
     reader.onload = () => {
       if (typeof reader.result === "string") {
-        setImage(reader.result);
+        updatePoster("image", reader.result);
+
+        toast.success(
+          "Background image added. Your original image is preserved.",
+        );
+      } else {
+        toast.error("Could not read this image.");
       }
+    };
+
+    reader.onerror = () => {
+      toast.error("Could not read this image file.");
     };
 
     reader.readAsDataURL(file);
   }
 
-  function drawPoster(exportImage = false) {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  // Search for anime or TV metadata.
+  async function findDetails(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
-    const width = exportImage ? 3840 : 720;
-    const height = exportImage ? 2160 : 405;
+    if (!query.trim()) {
+      toast.error("Enter a title to search.");
+      return;
+    }
 
-    canvas.width = width;
-    canvas.height = height;
+    setLoading(true);
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    try {
+      const result = await searchMetadata(query, kind);
 
-    const gradient = ctx.createLinearGradient(0, 0, width, height);
-    gradient.addColorStop(0, "#100e19");
-    gradient.addColorStop(1, "#302044");
+      setMetadata(result);
 
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, width, height);
+      setPoster((current) => ({
+        ...current,
 
-    const finish = () => {
-      const scale = width / 720;
+        title: result.title || current.title,
 
-      ctx.fillStyle = accent;
-      ctx.fillRect(0, 0, 8 * scale, height);
+        subtitle:
+          [result.year, result.language]
+            .filter(Boolean)
+            .join(" • ") || current.subtitle,
 
-      ctx.textAlign = "left";
-      ctx.fillStyle = "#ffffff";
-      ctx.font = `bold ${48 * scale}px Anton, Impact, sans-serif`;
-      ctx.fillText(title.slice(0, 35), 35 * scale, height * 0.66);
+        description:
+          result.description || current.description,
 
-      ctx.fillStyle = accent;
-      ctx.font = `bold ${15 * scale}px Arial`;
-      ctx.fillText(subtitle.slice(0, 75), 38 * scale, height * 0.75);
+        rating:
+          result.rating == null
+            ? ""
+            : `${result.rating.toFixed(1)} / 10`,
 
-      ctx.fillStyle = "#d1c9df";
-      ctx.font = `${14 * scale}px Arial`;
-      ctx.fillText(description.slice(0, 90), 38 * scale, height * 0.83);
+        genres: result.genres.join(" • "),
 
-      ctx.fillStyle = "#ffffff99";
-      ctx.font = `${11 * scale}px Arial`;
-      ctx.fillText("FRAMEFORGE • ANIME & MOVIE STUDIO", 38 * scale, height * 0.93);
+        status: result.status || "",
 
-      if (exportImage) {
-        const link = document.createElement("a");
-        link.download = "frameforge-poster.png";
-        link.href = canvas.toDataURL("image/png");
-        link.click();
-      }
-    };
+        seasons:
+          result.seasons != null
+            ? `${result.seasons} seasons`
+            : result.episodes != null
+              ? `${result.episodes} episodes`
+              : "",
 
-    if (image) {
-      const img = new Image();
+        language: result.language || "",
 
-      img.onload = () => {
-        const imageHeight = height * 0.62;
-        const imageWidth = width * 0.48;
+        year: result.year || "",
+      }));
 
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(width * 0.48, 0, width * 0.52, imageHeight);
-        ctx.clip();
-
-        const ratio = Math.max(
-          imageWidth / img.width,
-          imageHeight / img.height,
-        );
-
-        const drawWidth = img.width * ratio;
-        const drawHeight = img.height * ratio;
-
-        ctx.drawImage(
-          img,
-          width - drawWidth,
-          (imageHeight - drawHeight) / 2,
-          drawWidth,
-          drawHeight,
-        );
-
-        ctx.restore();
-
-        const overlay = ctx.createLinearGradient(
-          width * 0.35,
-          0,
-          width * 0.8,
-          0,
-        );
-
-        overlay.addColorStop(0, "#100e19");
-        overlay.addColorStop(1, "#100e1900");
-
-        ctx.fillStyle = overlay;
-        ctx.fillRect(0, 0, width, imageHeight);
-
-        finish();
-      };
-
-      img.onerror = () => {
-        finish();
-      };
-
-      img.src = image;
-    } else {
-      finish();
+      toast.success(`Details loaded from ${result.source}.`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not retrieve title details.",
+      );
+    } finally {
+      setLoading(false);
     }
   }
 
-  function exportPoster() {
-    drawPoster(true);
+  // Export a high-resolution PNG.
+  async function exportPoster() {
+    setExporting(true);
+
+    try {
+      await document.fonts.ready;
+
+      await exportPosterPng(canvasOptions);
+
+      toast.success("4K PNG exported successfully.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not export poster.",
+      );
+    } finally {
+      setExporting(false);
+    }
   }
 
+  // Restore the initial editor state.
   function resetPoster() {
-    setImage(null);
-    setTitle("YOUR TITLE");
-    setSubtitle("A CINEMATIC MASTERPIECE");
-    setDescription("A new adventure begins.");
-    setAccent("#a78bfa");
+    setPoster(initialState);
+    setMetadata(null);
+    setQuery("");
+    setPreviewReady(false);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+
+    toast.success("Poster editor reset.");
   }
 
   return (
     <main className="studio">
+      {/* Header */}
       <header className="topbar">
-        <a className="brand" href="./">
+        <a
+          className="brand"
+          href={`${import.meta.env.BASE_URL}`}
+        >
           <span className="brand-icon">
             <Film size={23} />
           </span>
@@ -183,28 +280,38 @@ function Studio() {
         </span>
       </header>
 
+      {/* Hero section */}
       <section className="hero">
-        <span className="eyebrow">YOUR VISION. YOUR POSTER.</span>
+        <span className="eyebrow">
+          YOUR VISION. YOUR POSTER.
+        </span>
 
         <h1>
           Forge your <span>frame.</span>
         </h1>
 
         <p>
-          Create your own cinematic artwork with a custom image, title,
-          description and high-resolution PNG export.
+          Upload your artwork, find available title details,
+          and create a cinematic poster with a live preview
+          and 4K PNG export.
         </p>
       </section>
 
+      {/* Main workspace */}
       <section className="workspace">
+        {/* Editor panel */}
         <aside className="editor panel">
           <div className="panel-heading">
             <div>
-              <span className="section-label">01 / CUSTOMIZE</span>
+              <span className="section-label">
+                01 / CUSTOMIZE
+              </span>
+
               <h2>Poster editor</h2>
             </div>
 
             <button
+              type="button"
               className="icon-button"
               onClick={resetPoster}
               title="Reset poster"
@@ -214,7 +321,9 @@ function Studio() {
             </button>
           </div>
 
+          {/* Image upload */}
           <button
+            type="button"
             className="upload-zone"
             onClick={() => fileInputRef.current?.click()}
           >
@@ -222,9 +331,15 @@ function Studio() {
               <Upload size={24} />
             </span>
 
-            <strong>{image ? "Change image" : "Upload your artwork"}</strong>
+            <strong>
+              {poster.image
+                ? "Change background image"
+                : "Upload your artwork"}
+            </strong>
 
-            <span>JPG, PNG or WEBP · Maximum 25 MB</span>
+            <span>
+              JPG, PNG or WEBP · Maximum 25 MB
+            </span>
           </button>
 
           <input
@@ -232,16 +347,101 @@ function Studio() {
             type="file"
             accept="image/jpeg,image/png,image/webp"
             hidden
-            onChange={(event) => uploadImage(event.target.files?.[0])}
+            onChange={(event) => {
+              uploadImage(event.target.files?.[0]);
+            }}
           />
 
+          {/* Metadata search */}
+          <form
+            className="metadata-search"
+            onSubmit={findDetails}
+          >
+            <label className="field">
+              <span>MEDIA TYPE</span>
+
+              <select
+                value={kind}
+                onChange={(event) => {
+                  setKind(event.target.value as MediaKind);
+                  setMetadata(null);
+                }}
+              >
+                <option value="anime">
+                  Anime · Jikan / MyAnimeList
+                </option>
+
+                <option value="tv">
+                  TV show · TVMaze
+                </option>
+
+                <option value="movie">
+                  Movie · Manual details
+                </option>
+              </select>
+            </label>
+
+            <label className="field">
+              <span>SEARCH TITLE</span>
+
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="e.g. Demon Slayer"
+                maxLength={100}
+              />
+            </label>
+
+            <button
+              className="secondary-button"
+              type="submit"
+              disabled={loading}
+            >
+              {loading ? (
+                <LoaderCircle className="spin" size={17} />
+              ) : (
+                <Search size={17} />
+              )}
+
+              {loading
+                ? "Searching metadata…"
+                : "Add details automatically"}
+            </button>
+          </form>
+
+          {/* Metadata source and rating */}
+          {metadata && (
+            <div className="source-card">
+              <strong>
+                Metadata source: {metadata.source}
+              </strong>
+
+              <span>
+                {metadata.rating == null
+                  ? "Rating unavailable"
+                  : `Rating: ${metadata.rating.toFixed(1)} / 10 (${metadata.ratingSource})`}
+              </span>
+
+              <a
+                href={metadata.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Verify source ↗
+              </a>
+            </div>
+          )}
+
+          {/* Editable poster details */}
           <label className="field">
             <span>POSTER TITLE</span>
 
             <input
-              value={title}
-              maxLength={35}
-              onChange={(event) => setTitle(event.target.value)}
+              value={poster.title}
+              maxLength={70}
+              onChange={(event) =>
+                updatePoster("title", event.target.value)
+              }
               placeholder="Enter poster title"
             />
           </label>
@@ -250,9 +450,11 @@ function Studio() {
             <span>SUBTITLE</span>
 
             <input
-              value={subtitle}
-              maxLength={75}
-              onChange={(event) => setSubtitle(event.target.value)}
+              value={poster.subtitle}
+              maxLength={90}
+              onChange={(event) =>
+                updatePoster("subtitle", event.target.value)
+              }
               placeholder="Enter subtitle"
             />
           </label>
@@ -261,11 +463,80 @@ function Studio() {
             <span>DESCRIPTION</span>
 
             <textarea
-              value={description}
-              maxLength={90}
-              rows={3}
-              onChange={(event) => setDescription(event.target.value)}
+              value={poster.description}
+              maxLength={500}
+              rows={4}
+              onChange={(event) =>
+                updatePoster("description", event.target.value)
+              }
               placeholder="Enter a short description"
+            />
+          </label>
+
+          <label className="field">
+            <span>RATING (WITH SOURCE IN PANEL ABOVE)</span>
+
+            <input
+              value={poster.rating}
+              maxLength={30}
+              onChange={(event) =>
+                updatePoster("rating", event.target.value)
+              }
+              placeholder="e.g. 8.7 / 10"
+            />
+          </label>
+
+          <label className="field">
+            <span>GENRES</span>
+
+            <input
+              value={poster.genres}
+              maxLength={120}
+              onChange={(event) =>
+                updatePoster("genres", event.target.value)
+              }
+              placeholder="Action • Adventure"
+            />
+          </label>
+
+          <div className="field-row">
+            <label className="field">
+              <span>STATUS</span>
+
+              <input
+                value={poster.status}
+                maxLength={50}
+                onChange={(event) =>
+                  updatePoster("status", event.target.value)
+                }
+                placeholder="Finished airing"
+              />
+            </label>
+
+            <label className="field">
+              <span>SEASONS / EPISODES</span>
+
+              <input
+                value={poster.seasons}
+                maxLength={40}
+                onChange={(event) =>
+                  updatePoster("seasons", event.target.value)
+                }
+                placeholder="2 seasons"
+              />
+            </label>
+          </div>
+
+          <label className="field">
+            <span>LANGUAGE</span>
+
+            <input
+              value={poster.language}
+              maxLength={50}
+              onChange={(event) =>
+                updatePoster("language", event.target.value)
+              }
+              placeholder="Japanese / English"
             />
           </label>
 
@@ -275,28 +546,50 @@ function Studio() {
             <div className="color-picker">
               <input
                 type="color"
-                value={accent}
-                onChange={(event) => setAccent(event.target.value)}
+                value={poster.accent}
+                onChange={(event) =>
+                  updatePoster("accent", event.target.value)
+                }
+                aria-label="Choose poster accent color"
               />
 
-              <span>{accent.toUpperCase()}</span>
+              <span>{poster.accent.toUpperCase()}</span>
             </div>
           </label>
 
-          <button className="primary-button" onClick={exportPoster}>
-            <Download size={18} />
-            Export 4K PNG
+          {/* Export */}
+          <button
+            type="button"
+            className="primary-button"
+            onClick={exportPoster}
+            disabled={exporting}
+          >
+            {exporting ? (
+              <LoaderCircle className="spin" size={18} />
+            ) : (
+              <Download size={18} />
+            )}
+
+            {exporting
+              ? "Preparing 4K PNG…"
+              : "Export 4K PNG · 3840 × 2160"}
           </button>
 
           <p className="helper">
-            Your uploaded image and poster details stay in this browser.
+            Image processing happens in your browser.
+            Metadata is fetched from the linked public source;
+            availability depends on the title and API.
           </p>
         </aside>
 
+        {/* Preview panel */}
         <section className="preview-panel panel">
           <div className="panel-heading">
             <div>
-              <span className="section-label">02 / PREVIEW</span>
+              <span className="section-label">
+                02 / PREVIEW
+              </span>
+
               <h2>Your creation</h2>
             </div>
 
@@ -310,23 +603,42 @@ function Studio() {
             <div className="poster-frame">
               <canvas
                 ref={canvasRef}
-                aria-label="Poster preview"
+                aria-label="Live poster preview"
                 role="img"
               />
 
-              <div className="poster-placeholder">
-                <ImageIcon size={34} />
-                <span>YOUR CANVAS AWAITS</span>
-              </div>
+              {!previewReady && (
+                <div className="poster-placeholder">
+                  <ImageIcon size={34} />
+                  <span>PREPARING YOUR CANVAS</span>
+                </div>
+              )}
             </div>
           </div>
 
           <p className="preview-note">
-            Preview updates as you customize your poster.
+            Live preview updates when you change the image
+            or poster details. Export creates a
+            3840 × 2160 PNG.
           </p>
+
+          {metadata && (
+            <p className="preview-note">
+              Source:{" "}
+              <a
+                href={metadata.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {metadata.source}
+              </a>
+              . Please verify ratings and metadata at the source.
+            </p>
+          )}
         </section>
       </section>
 
+      {/* Footer */}
       <footer>
         <span>FRAMEFORGE STUDIO</span>
         <span>MADE FOR YOUR IMAGINATION</span>
