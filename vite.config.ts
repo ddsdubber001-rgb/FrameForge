@@ -5,18 +5,15 @@ import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
   base: "/FrameForge/",
-
   plugins: [
     react(),
     tailwindcss(),
     tsconfigPaths(),
   ],
-
   build: {
     outDir: "dist",
     emptyOutDir: true,
   },
-
   resolve: {
     dedupe: ["react", "react-dom"],
   },
