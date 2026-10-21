@@ -1,652 +1,342 @@
-import { createFileRoute } from "@tanstack/react-router";
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type FormEvent,
-} from "react";
-import {
-  Download,
-  Film,
-  Image as ImageIcon,
-  LoaderCircle,
-  RotateCcw,
-  Search,
-  Upload,
-} from "lucide-react";
-import { toast } from "sonner";
-import { searchMetadata } from "../services/api";
-import { drawPoster, exportPosterPng } from "../utils/canvas";
-import type { MediaKind, PosterMetadata } from "../types";
+import { createFileRoute } from '@tanstack/react-router'
+import React, { useState, useEffect, useRef } from 'react'
+import { 
+  Upload, Search, Sparkles, Download, 
+  Film, RefreshCw, Sliders, Image as ImageIcon 
+} from 'lucide-react'
+import { searchMedia } from '../services/api'
+import { exportTo4KCanvas } from '../utils/canvas'
+import { MediaItem, OverlaySettings } from '../types'
 
-const initialState = {
-  image: null as string | null,
-  title: "YOUR TITLE",
-  subtitle: "A CINEMATIC MASTERPIECE",
-  description: "A new adventure begins.",
-  accent: "#a78bfa",
-  rating: "",
-  genres: "",
-  status: "",
-  seasons: "",
-  language: "",
-  year: "",
-};
+export const Route = createFileRoute('/')({
+  component: FrameForgeHome,
+})
 
-function Studio() {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+function FrameForgeHome() {
+  const [bgImage, setBgImage] = useState<string>('https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=1600&auto=format&fit=crop')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<MediaItem[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null)
+  
+  const [settings, setSettings] = useState<OverlaySettings>({
+    title: 'Cyberpunk Edgerunners',
+    secondaryTitle: 'サイバーパンク エッジランナーズ',
+    rating: '8.6 / 10',
+    status: 'Completed',
+    genres: ['Action', 'Sci-Fi', 'Cyberpunk', 'Animation'],
+    year: '2024',
+    overlayStyle: 'cinematic',
+    fontFamily: 'Outfit',
+    accentColor: '#38bdf8',
+    opacity: 85
+  })
 
-  const [poster, setPoster] = useState(initialState);
-  const [query, setQuery] = useState("");
-  const [kind, setKind] = useState<MediaKind>("anime");
-  const [loading, setLoading] = useState(false);
-  const [previewReady, setPreviewReady] = useState(false);
-  const [metadata, setMetadata] = useState<PosterMetadata | null>(null);
-  const [exporting, setExporting] = useState(false);
+  const [previewDataUrl, setPreviewDataUrl] = useState<string>('')
+  const [isExporting, setIsExporting] = useState(false)
+  const imageElementRef = useRef<HTMLImageElement | null>(null)
 
-  const canvasOptions = useMemo(
-    () => ({
-      image: poster.image,
-      title: poster.title,
-      subtitle: poster.subtitle,
-      description: poster.description,
-      accent: poster.accent,
-      rating: poster.rating,
-      genres: poster.genres,
-      status: poster.status,
-      seasons: poster.seasons,
-      language: poster.language,
-      year: poster.year,
-    }),
-    [poster],
-  );
-
-  // Live poster preview.
   useEffect(() => {
-    const canvas = canvasRef.current;
-
-    if (!canvas) {
-      return;
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.src = bgImage
+    img.onload = () => {
+      imageElementRef.current = img
+      updateLivePreview()
     }
+  }, [bgImage])
 
-    let cancelled = false;
+  useEffect(() => {
+    updateLivePreview()
+  }, [settings])
 
-    drawPoster(canvas, canvasOptions)
-      .then(() => {
-        if (!cancelled) {
-          setPreviewReady(true);
-        }
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          toast.error(
-            error instanceof Error
-              ? error.message
-              : "Preview could not be rendered.",
-          );
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [canvasOptions]);
-
-  function updatePoster<K extends keyof typeof initialState>(
-    key: K,
-    value: (typeof initialState)[K],
-  ) {
-    setPoster((current) => ({
-      ...current,
-      [key]: value,
-    }));
+  const updateLivePreview = async () => {
+    try {
+      const dataUrl = await exportTo4KCanvas(imageElementRef.current, settings)
+      setPreviewDataUrl(dataUrl)
+    } catch (e) {
+      console.error('Preview render error:', e)
+    }
   }
 
-  // Upload a local background image.
-  function uploadImage(file?: File) {
-    if (!file) {
-      return;
-    }
-
-    const allowedTypes = [
-      "image/jpeg",
-      "image/png",
-      "image/webp",
-    ];
-
-    if (!allowedTypes.includes(file.type)) {
-      toast.error("Choose a JPG, PNG or WEBP image.");
-
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-
-      return;
-    }
-
-    const maximumSize = 25 * 1024 * 1024;
-
-    if (file.size > maximumSize) {
-      toast.error("Image size must be 25 MB or less.");
-
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-
-      return;
-    }
-
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        updatePoster("image", reader.result);
-
-        toast.success(
-          "Background image added. Your original image is preserved.",
-        );
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (searchQuery.trim().length > 1) {
+        setIsSearching(true)
+        const results = await searchMedia(searchQuery)
+        setSearchResults(results)
+        setIsSearching(false)
       } else {
-        toast.error("Could not read this image.");
+        setSearchResults([])
       }
-    };
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
 
-    reader.onerror = () => {
-      toast.error("Could not read this image file.");
-    };
-
-    reader.readAsDataURL(file);
+  const handleSelectMedia = (item: MediaItem) => {
+    setSelectedMedia(item)
+    setBgImage(item.imageUrl)
+    setSettings(prev => ({
+      ...prev,
+      title: item.title,
+      rating: typeof item.rating === 'string' ? item.rating : `${item.rating} / 10`,
+      status: item.status,
+      genres: item.genres,
+      year: item.year
+    }))
+    setSearchResults([])
+    setSearchQuery('')
   }
 
-  // Search for anime or TV metadata.
-  async function findDetails(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!query.trim()) {
-      toast.error("Enter a title to search.");
-      return;
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setBgImage(event.target.result as string)
+        }
+      }
+      reader.readAsDataURL(file)
     }
+  }
 
-    setLoading(true);
-
+  const handleDownload4K = async () => {
+    setIsExporting(true)
     try {
-      const result = await searchMetadata(query, kind);
-
-      setMetadata(result);
-
-      setPoster((current) => ({
-        ...current,
-
-        title: result.title || current.title,
-
-        subtitle:
-          [result.year, result.language]
-            .filter(Boolean)
-            .join(" • ") || current.subtitle,
-
-        description:
-          result.description || current.description,
-
-        rating:
-          result.rating == null
-            ? ""
-            : `${result.rating.toFixed(1)} / 10`,
-
-        genres: result.genres.join(" • "),
-
-        status: result.status || "",
-
-        seasons:
-          result.seasons != null
-            ? `${result.seasons} seasons`
-            : result.episodes != null
-              ? `${result.episodes} episodes`
-              : "",
-
-        language: result.language || "",
-
-        year: result.year || "",
-      }));
-
-      toast.success(`Details loaded from ${result.source}.`);
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Could not retrieve title details.",
-      );
+      const dataUrl = await exportTo4KCanvas(imageElementRef.current, settings)
+      const link = document.createElement('a')
+      link.download = `${settings.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}-4k-frameforge.png`
+      link.href = dataUrl
+      link.click()
+    } catch (err) {
+      console.error('Export failed', err)
     } finally {
-      setLoading(false);
+      setIsExporting(false)
     }
-  }
-
-  // Export a high-resolution PNG.
-  async function exportPoster() {
-    setExporting(true);
-
-    try {
-      await document.fonts.ready;
-
-      await exportPosterPng(canvasOptions);
-
-      toast.success("4K PNG exported successfully.");
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Could not export poster.",
-      );
-    } finally {
-      setExporting(false);
-    }
-  }
-
-  // Restore the initial editor state.
-  function resetPoster() {
-    setPoster(initialState);
-    setMetadata(null);
-    setQuery("");
-    setPreviewReady(false);
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-
-    toast.success("Poster editor reset.");
   }
 
   return (
-    <main className="studio">
-      {/* Header */}
-      <header className="topbar">
-        <a
-          className="brand"
-          href={`${import.meta.env.BASE_URL}`}
-        >
-          <span className="brand-icon">
-            <Film size={23} />
-          </span>
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col w-full">
+      <header className="border-b border-slate-800 bg-slate-900/60 backdrop-blur-md sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <div className="bg-gradient-to-tr from-indigo-500 to-cyan-400 p-2.5 rounded-xl shadow-lg shadow-indigo-500/20">
+            <Film className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-black tracking-wider bg-gradient-to-r from-white via-slate-200 to-indigo-300 bg-clip-text text-transparent">
+              FRAMEFORGE <span className="text-xs bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded-full font-semibold ml-2">4K STUDIO</span>
+            </h1>
+            <p className="text-xs text-slate-400">Professional Anime & Movie Poster Generator</p>
+          </div>
+        </div>
 
-          <span>
-            <strong>FrameForge</strong>
-            <small>ANIME & MOVIE POSTER STUDIO</small>
-          </span>
-        </a>
-
-        <span className="status">
-          <span className="status-dot" />
-          CREATIVE STUDIO
-        </span>
+        <div className="flex items-center space-x-4">
+          <button 
+            onClick={handleDownload4K}
+            disabled={isExporting}
+            className="flex items-center space-x-2 bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white font-semibold px-6 py-2.5 rounded-xl shadow-lg shadow-indigo-600/30 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+          >
+            {isExporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            <span>{isExporting ? 'Rendering 4K...' : 'Export 4K PNG'}</span>
+          </button>
+        </div>
       </header>
 
-      {/* Hero section */}
-      <section className="hero">
-        <span className="eyebrow">
-          YOUR VISION. YOUR POSTER.
-        </span>
-
-        <h1>
-          Forge your <span>frame.</span>
-        </h1>
-
-        <p>
-          Upload your artwork, find available title details,
-          and create a cinematic poster with a live preview
-          and 4K PNG export.
-        </p>
-      </section>
-
-      {/* Main workspace */}
-      <section className="workspace">
-        {/* Editor panel */}
-        <aside className="editor panel">
-          <div className="panel-heading">
-            <div>
-              <span className="section-label">
-                01 / CUSTOMIZE
-              </span>
-
-              <h2>Poster editor</h2>
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 max-w-[1800px] mx-auto w-full">
+        <div className="lg:col-span-4 space-y-6 flex flex-col">
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-5 shadow-xl backdrop-blur-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-bold flex items-center space-x-2 text-indigo-400">
+                <Search className="w-4 h-4" />
+                <span>ADD DETAILS (API SEARCH)</span>
+              </label>
+              <span className="text-xs text-slate-500">Jikan & TVMaze</span>
             </div>
-
-            <button
-              type="button"
-              className="icon-button"
-              onClick={resetPoster}
-              title="Reset poster"
-              aria-label="Reset poster"
-            >
-              <RotateCcw size={17} />
-            </button>
-          </div>
-
-          {/* Image upload */}
-          <button
-            type="button"
-            className="upload-zone"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <span className="upload-icon">
-              <Upload size={24} />
-            </span>
-
-            <strong>
-              {poster.image
-                ? "Change background image"
-                : "Upload your artwork"}
-            </strong>
-
-            <span>
-              JPG, PNG or WEBP · Maximum 25 MB
-            </span>
-          </button>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            hidden
-            onChange={(event) => {
-              uploadImage(event.target.files?.[0]);
-            }}
-          />
-
-          {/* Metadata search */}
-          <form
-            className="metadata-search"
-            onSubmit={findDetails}
-          >
-            <label className="field">
-              <span>MEDIA TYPE</span>
-
-              <select
-                value={kind}
-                onChange={(event) => {
-                  setKind(event.target.value as MediaKind);
-                  setMetadata(null);
-                }}
-              >
-                <option value="anime">
-                  Anime · Jikan / MyAnimeList
-                </option>
-
-                <option value="tv">
-                  TV show · TVMaze
-                </option>
-
-                <option value="movie">
-                  Movie · Manual details
-                </option>
-              </select>
-            </label>
-
-            <label className="field">
-              <span>SEARCH TITLE</span>
-
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="e.g. Demon Slayer"
-                maxLength={100}
+            
+            <div className="relative">
+              <input 
+                type="text"
+                placeholder="Search anime or movie (e.g., Naruto, Interstellar)..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
               />
-            </label>
-
-            <button
-              className="secondary-button"
-              type="submit"
-              disabled={loading}
-            >
-              {loading ? (
-                <LoaderCircle className="spin" size={17} />
-              ) : (
-                <Search size={17} />
+              {isSearching && (
+                <div className="absolute right-3 top-3.5">
+                  <RefreshCw className="w-4 h-4 animate-spin text-indigo-400" />
+                </div>
               )}
 
-              {loading
-                ? "Searching metadata…"
-                : "Add details automatically"}
-            </button>
-          </form>
-
-          {/* Metadata source and rating */}
-          {metadata && (
-            <div className="source-card">
-              <strong>
-                Metadata source: {metadata.source}
-              </strong>
-
-              <span>
-                {metadata.rating == null
-                  ? "Rating unavailable"
-                  : `Rating: ${metadata.rating.toFixed(1)} / 10 (${metadata.ratingSource})`}
-              </span>
-
-              <a
-                href={metadata.sourceUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Verify source ↗
-              </a>
-            </div>
-          )}
-
-          {/* Editable poster details */}
-          <label className="field">
-            <span>POSTER TITLE</span>
-
-            <input
-              value={poster.title}
-              maxLength={70}
-              onChange={(event) =>
-                updatePoster("title", event.target.value)
-              }
-              placeholder="Enter poster title"
-            />
-          </label>
-
-          <label className="field">
-            <span>SUBTITLE</span>
-
-            <input
-              value={poster.subtitle}
-              maxLength={90}
-              onChange={(event) =>
-                updatePoster("subtitle", event.target.value)
-              }
-              placeholder="Enter subtitle"
-            />
-          </label>
-
-          <label className="field">
-            <span>DESCRIPTION</span>
-
-            <textarea
-              value={poster.description}
-              maxLength={500}
-              rows={4}
-              onChange={(event) =>
-                updatePoster("description", event.target.value)
-              }
-              placeholder="Enter a short description"
-            />
-          </label>
-
-          <label className="field">
-            <span>RATING (WITH SOURCE IN PANEL ABOVE)</span>
-
-            <input
-              value={poster.rating}
-              maxLength={30}
-              onChange={(event) =>
-                updatePoster("rating", event.target.value)
-              }
-              placeholder="e.g. 8.7 / 10"
-            />
-          </label>
-
-          <label className="field">
-            <span>GENRES</span>
-
-            <input
-              value={poster.genres}
-              maxLength={120}
-              onChange={(event) =>
-                updatePoster("genres", event.target.value)
-              }
-              placeholder="Action • Adventure"
-            />
-          </label>
-
-          <div className="field-row">
-            <label className="field">
-              <span>STATUS</span>
-
-              <input
-                value={poster.status}
-                maxLength={50}
-                onChange={(event) =>
-                  updatePoster("status", event.target.value)
-                }
-                placeholder="Finished airing"
-              />
-            </label>
-
-            <label className="field">
-              <span>SEASONS / EPISODES</span>
-
-              <input
-                value={poster.seasons}
-                maxLength={40}
-                onChange={(event) =>
-                  updatePoster("seasons", event.target.value)
-                }
-                placeholder="2 seasons"
-              />
-            </label>
-          </div>
-
-          <label className="field">
-            <span>LANGUAGE</span>
-
-            <input
-              value={poster.language}
-              maxLength={50}
-              onChange={(event) =>
-                updatePoster("language", event.target.value)
-              }
-              placeholder="Japanese / English"
-            />
-          </label>
-
-          <label className="field">
-            <span>ACCENT COLOR</span>
-
-            <div className="color-picker">
-              <input
-                type="color"
-                value={poster.accent}
-                onChange={(event) =>
-                  updatePoster("accent", event.target.value)
-                }
-                aria-label="Choose poster accent color"
-              />
-
-              <span>{poster.accent.toUpperCase()}</span>
-            </div>
-          </label>
-
-          {/* Export */}
-          <button
-            type="button"
-            className="primary-button"
-            onClick={exportPoster}
-            disabled={exporting}
-          >
-            {exporting ? (
-              <LoaderCircle className="spin" size={18} />
-            ) : (
-              <Download size={18} />
-            )}
-
-            {exporting
-              ? "Preparing 4K PNG…"
-              : "Export 4K PNG · 3840 × 2160"}
-          </button>
-
-          <p className="helper">
-            Image processing happens in your browser.
-            Metadata is fetched from the linked public source;
-            availability depends on the title and API.
-          </p>
-        </aside>
-
-        {/* Preview panel */}
-        <section className="preview-panel panel">
-          <div className="panel-heading">
-            <div>
-              <span className="section-label">
-                02 / PREVIEW
-              </span>
-
-              <h2>Your creation</h2>
-            </div>
-
-            <span className="preview-badge">
-              <ImageIcon size={14} />
-              16:9 LANDSCAPE
-            </span>
-          </div>
-
-          <div className="poster-stage">
-            <div className="poster-frame">
-              <canvas
-                ref={canvasRef}
-                aria-label="Live poster preview"
-                role="img"
-              />
-
-              {!previewReady && (
-                <div className="poster-placeholder">
-                  <ImageIcon size={34} />
-                  <span>PREPARING YOUR CANVAS</span>
+              {searchResults.length > 0 && (
+                <div className="absolute left-0 right-0 mt-2 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl max-h-80 overflow-y-auto z-50 divide-y divide-slate-800">
+                  {searchResults.map((item) => (
+                    <div 
+                      key={item.id}
+                      onClick={() => handleSelectMedia(item)}
+                      className="flex items-center space-x-3 p-3 hover:bg-slate-800/80 cursor-pointer transition-colors"
+                    >
+                      <img src={item.imageUrl} alt={item.title} className="w-12 h-16 object-cover rounded-lg" />
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-semibold truncate text-white">{item.title}</h4>
+                        <p className="text-xs text-slate-400">{item.year} • ★ {item.rating}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           </div>
 
-          <p className="preview-note">
-            Live preview updates when you change the image
-            or poster details. Export creates a
-            3840 × 2160 PNG.
-          </p>
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-5 shadow-xl backdrop-blur-sm space-y-4">
+            <label className="text-sm font-bold flex items-center space-x-2 text-cyan-400">
+              <Upload className="w-4 h-4" />
+              <span>UPLOAD IMAGE BACKGROUND</span>
+            </label>
+            <label className="border-2 border-dashed border-slate-800 hover:border-cyan-500/50 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer bg-slate-950/50 transition-all group">
+              <ImageIcon className="w-8 h-8 text-slate-500 group-hover:text-cyan-400 mb-2 transition-colors" />
+              <span className="text-sm font-medium text-slate-300">Click to upload custom poster</span>
+              <span className="text-xs text-slate-500 mt-1">Preserves original aspect ratio & background</span>
+              <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+            </label>
+          </div>
 
-          {metadata && (
-            <p className="preview-note">
-              Source:{" "}
-              <a
-                href={metadata.sourceUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {metadata.source}
-              </a>
-              . Please verify ratings and metadata at the source.
-            </p>
-          )}
-        </section>
-      </section>
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-5 shadow-xl backdrop-blur-sm space-y-4 flex-1">
+            <label className="text-sm font-bold flex items-center space-x-2 text-emerald-400">
+              <Sliders className="w-4 h-4" />
+              <span>SMART OVERLAY CONTROLS</span>
+            </label>
 
-      {/* Footer */}
-      <footer>
-        <span>FRAMEFORGE STUDIO</span>
-        <span>MADE FOR YOUR IMAGINATION</span>
-      </footer>
-    </main>
-  );
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-slate-400 font-medium mb-1 block">Title</label>
+                <input 
+                  type="text" 
+                  value={settings.title}
+                  onChange={(e) => setSettings({...settings, title: e.target.value})}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-400 font-medium mb-1 block">Secondary Title / Subtitle</label>
+                <input 
+                  type="text" 
+                  value={settings.secondaryTitle}
+                  onChange={(e) => setSettings({...settings, secondaryTitle: e.target.value})}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 font-medium mb-1 block">Rating</label>
+                  <input 
+                    type="text" 
+                    value={settings.rating}
+                    onChange={(e) => setSettings({...settings, rating: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 font-medium mb-1 block">Status</label>
+                  <input 
+                    type="text" 
+                    value={settings.status}
+                    onChange={(e) => setSettings({...settings, status: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 font-medium mb-1 block">Overlay Style</label>
+                  <select 
+                    value={settings.overlayStyle}
+                    onChange={(e) => setSettings({...settings, overlayStyle: e.target.value as any})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="cinematic">Cinematic Gradient</option>
+                    <option value="minimal">Minimalist Dark</option>
+                    <option value="cyberpunk">Cyberpunk Neon</option>
+                    <option value="glass">Glass Card</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 font-medium mb-1 block">Font Family</label>
+                  <select 
+                    value={settings.fontFamily}
+                    onChange={(e) => setSettings({...settings, fontFamily: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="Outfit">Outfit</option>
+                    <option value="Inter">Inter</option>
+                    <option value="Cinzel">Cinzel</option>
+                    <option value="Orbitron">Orbitron</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 font-medium mb-1 block">Accent Color</label>
+                  <div className="flex items-center space-x-2">
+                    <input 
+                      type="color" 
+                      value={settings.accentColor}
+                      onChange={(e) => setSettings({...settings, accentColor: e.target.value})}
+                      className="w-10 h-9 bg-slate-950 border border-slate-800 rounded-lg cursor-pointer"
+                    />
+                    <input 
+                      type="text" 
+                      value={settings.accentColor}
+                      onChange={(e) => setSettings({...settings, accentColor: e.target.value})}
+                      className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 font-medium mb-1 block">Opacity ({settings.opacity}%)</label>
+                  <input 
+                    type="range" 
+                    min="20" 
+                    max="100" 
+                    value={settings.opacity}
+                    onChange={(e) => setSettings({...settings, opacity: Number(e.target.value)})}
+                    className="w-full mt-2 accent-emerald-500 cursor-pointer"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="lg:col-span-8 flex flex-col space-y-4">
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 shadow-xl backdrop-blur-sm flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span className="text-sm font-bold text-slate-200">LIVE PREVIEW (4K Canvas Render)</span>
+            </div>
+            <span className="text-xs bg-slate-800 px-3 py-1 rounded-full text-slate-400">3840 × 2160 Ratio Scale</span>
+          </div>
+
+          <div className="flex-1 bg-slate-950 border border-slate-900 rounded-2xl overflow-hidden flex items-center justify-center p-4 min-h-[550px] shadow-2xl relative">
+            {previewDataUrl ? (
+              <img 
+                src={previewDataUrl} 
+                alt="Live Preview" 
+                className="max-h-[75vh] w-auto object-contain rounded-lg shadow-2xl border border-slate-800/50"
+              />
+            ) : (
+              <div className="flex flex-col items-center space-y-3">
+                <RefreshCw className="w-8 h-8 animate-spin text-indigo-500" />
+                <p className="text-sm text-slate-400">Rendering high-quality preview...</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
-
-export const Route = createFileRoute("/")({
-  component: Studio,
-});
