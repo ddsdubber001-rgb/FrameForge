@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: #171020;
+  --color-muted-foreground: var(--muted-foreground);
+  --color-input: var(--border);
+  --color-accent: var(--muted);
+}
+
 :root {
   font-family: "Manrope", sans-serif;
   color: #f5f2ff;
@@ -60,15 +70,11 @@ select:focus-visible {
   outline-offset: 3px;
 }
 
-/* Main application wrapper */
-
 .studio {
   width: min(1440px, 100%);
   margin: 0 auto;
   padding: 0 42px;
 }
-
-/* Header */
 
 .topbar {
   display: flex;
@@ -134,8 +140,6 @@ select:focus-visible {
   box-shadow: 0 0 12px #a78bfa;
 }
 
-/* Hero section */
-
 .hero {
   max-width: 700px;
   margin: 72px auto 55px;
@@ -178,8 +182,6 @@ select:focus-visible {
   line-height: 1.9;
 }
 
-/* Workspace layout */
-
 .workspace {
   display: grid;
   grid-template-columns:
@@ -200,8 +202,6 @@ select:focus-visible {
   );
   box-shadow: 0 18px 60px #00000018;
 }
-
-/* Panel headings */
 
 .editor {
   padding: 24px;
@@ -236,8 +236,6 @@ select:focus-visible {
 .icon-button:hover {
   background: #a78bfa18;
 }
-
-/* Image upload */
 
 .upload-zone {
   display: flex;
@@ -280,8 +278,6 @@ select:focus-visible {
   color: var(--muted-foreground);
   font-size: 10px;
 }
-
-/* Form fields */
 
 .field {
   display: block;
@@ -330,8 +326,6 @@ select:focus-visible {
   font-size: 12px;
 }
 
-/* Accent color picker */
-
 .color-picker {
   display: flex;
   min-height: 48px;
@@ -358,8 +352,6 @@ select:focus-visible {
   font-weight: 700;
   letter-spacing: 1px;
 }
-
-/* Export button */
 
 .primary-button {
   display: flex;
@@ -404,8 +396,6 @@ select:focus-visible {
   line-height: 1.7;
   text-align: center;
 }
-
-/* Preview panel */
 
 .preview-panel {
   min-width: 0;
@@ -503,8 +493,6 @@ select:focus-visible {
   text-underline-offset: 3px;
 }
 
-/* Footer */
-
 footer {
   display: flex;
   justify-content: space-between;
@@ -517,8 +505,6 @@ footer {
   font-weight: 800;
   letter-spacing: 1.2px;
 }
-
-/* Metadata search */
 
 .metadata-search {
   margin-top: 22px;
@@ -572,8 +558,6 @@ footer {
   gap: 12px;
 }
 
-/* Loading animation */
-
 .spin {
   animation: frameforge-spin 1s linear infinite;
 }
@@ -583,8 +567,6 @@ footer {
     transform: rotate(360deg);
   }
 }
-
-/* Tablet layout */
 
 @media (max-width: 850px) {
   .studio {
@@ -603,8 +585,6 @@ footer {
     min-height: 280px;
   }
 }
-
-/* Mobile layout */
 
 @media (max-width: 480px) {
   .studio {
@@ -630,8 +610,9 @@ footer {
   }
 
   .status {
+    gap: 5px;
     font-size: 8px;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.35px;
   }
 
   .hero {
@@ -673,4 +654,59 @@ footer {
   .metadata-search {
     padding: 12px;
   }
+}
+
+@media (max-width: 360px) {
+  .studio {
+    padding: 0 10px;
   }
+
+  .topbar {
+    gap: 8px;
+  }
+
+  .brand {
+    gap: 8px;
+  }
+
+  .brand small {
+    max-width: 150px;
+    line-height: 1.4;
+  }
+
+  .status {
+    max-width: 90px;
+    text-align: right;
+    line-height: 1.4;
+  }
+
+  .editor,
+  .preview-panel {
+    padding: 13px;
+  }
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+textarea,
+select {
+  min-width: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
