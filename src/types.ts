@@ -1,55 +1,25 @@
-export type MediaKind = "anime" | "tv" | "movie";
-
-export interface PosterMetadata {
-  source: string;
-
-  sourceUrl: string;
-
+export interface MediaItem {
+  id: string | number;
   title: string;
-
-  originalTitle?: string;
-
-  description?: string;
-
-  rating?: number | null;
-
-  ratingSource?: string;
-
+  type: 'anime' | 'movie' | 'tv';
+  imageUrl: string;
+  rating: string | number;
   genres: string[];
-
-  status?: string;
-
-  year?: string;
-
-  seasons?: number | null;
-
-  episodes?: number | null;
-
-  language?: string;
-
-  imageUrl?: string;
+  status: string;
+  year: string;
+  episodes?: number;
+  synopsis?: string;
 }
 
-export interface PosterState {
-  image: string | null;
-
+export interface OverlaySettings {
   title: string;
-
-  subtitle: string;
-
-  description: string;
-
-  accent: string;
-
+  secondaryTitle: string;
   rating: string;
-
-  genres: string;
-
   status: string;
-
-  seasons: string;
-
-  language: string;
-
+  genres: string[];
   year: string;
+  overlayStyle: 'cinematic' | 'minimal' | 'cyberpunk' | 'glass';
+  fontFamily: string;
+  accentColor: string;
+  opacity: number;
 }
