@@ -23,13 +23,15 @@ import type { MediaKind, PosterMetadata } from "../types";
 const initialState = {
   image: null as string | null,
   title: "YOUR TITLE",
-  subtitle: "A CINEMATIC MASTERPIECE",
+  subtitle: "",
   description: "A new adventure begins.",
   accent: "#a78bfa",
   rating: "",
+  ratingSource: "",
   genres: "",
   status: "",
   seasons: "",
+  episodes: "",
   language: "",
   year: "",
 };
@@ -49,18 +51,21 @@ function Studio() {
   const canvasOptions = useMemo(
     () => ({
       image: poster.image,
+      mediaKind: kind,
       title: poster.title,
       subtitle: poster.subtitle,
       description: poster.description,
       accent: poster.accent,
       rating: poster.rating,
+      ratingSource: poster.ratingSource,
       genres: poster.genres,
       status: poster.status,
       seasons: poster.seasons,
+      episodes: poster.episodes,
       language: poster.language,
       year: poster.year,
     }),
-    [poster],
+    [poster, kind],
   );
 
   // Live poster preview.
@@ -73,11 +78,17 @@ function Studio() {
 
     let cancelled = false;
 
-    drawPoster(canvas, canvasOptions)
+    const renderCanvas = document.createElement("canvas");
+    void document.fonts.ready
+      .then(() => drawPoster(renderCanvas, canvasOptions))
       .then(() => {
-        if (!cancelled) {
-          setPreviewReady(true);
-        }
+        if (cancelled) return;
+        canvas.width = renderCanvas.width;
+        canvas.height = renderCanvas.height;
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Canvas is not supported by this browser.");
+        context.drawImage(renderCanvas, 0, 0);
+        setPreviewReady(true);
       })
       .catch((error: unknown) => {
         if (!cancelled) {
@@ -104,7 +115,6 @@ function Studio() {
     }));
   }
 
-  // Upload a local background image.
   function uploadImage(file?: File) {
     if (!file) {
       return;
@@ -154,12 +164,12 @@ function Studio() {
 
     reader.onerror = () => {
       toast.error("Could not read this image file.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
     };
 
     reader.readAsDataURL(file);
   }
 
-  // Search for anime or TV metadata.
   async function findDetails(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -181,9 +191,9 @@ function Studio() {
         title: result.title || current.title,
 
         subtitle:
-          [result.year, result.language]
-            .filter(Boolean)
-            .join(" • ") || current.subtitle,
+          result.originalTitle && result.originalTitle !== result.title
+            ? result.originalTitle
+            : "",
 
         description:
           result.description || current.description,
@@ -193,6 +203,8 @@ function Studio() {
             ? ""
             : `${result.rating.toFixed(1)} / 10`,
 
+        ratingSource: result.ratingSource || result.source,
+
         genres: result.genres.join(" • "),
 
         status: result.status || "",
@@ -200,9 +212,12 @@ function Studio() {
         seasons:
           result.seasons != null
             ? `${result.seasons} seasons`
-            : result.episodes != null
-              ? `${result.episodes} episodes`
-              : "",
+            : "",
+
+        episodes:
+          result.episodes != null
+            ? `${result.episodes} episodes`
+            : "",
 
         language: result.language || "",
 
@@ -221,15 +236,12 @@ function Studio() {
     }
   }
 
-  // Export a high-resolution PNG.
   async function exportPoster() {
     setExporting(true);
 
     try {
       await document.fonts.ready;
-
       await exportPosterPng(canvasOptions);
-
       toast.success("4K PNG exported successfully.");
     } catch (error) {
       toast.error(
@@ -242,11 +254,11 @@ function Studio() {
     }
   }
 
-  // Restore the initial editor state.
   function resetPoster() {
     setPoster(initialState);
     setMetadata(null);
     setQuery("");
+    setKind("anime");
     setPreviewReady(false);
 
     if (fileInputRef.current) {
@@ -258,7 +270,6 @@ function Studio() {
 
   return (
     <main className="studio">
-      {/* Header */}
       <header className="topbar">
         <a
           className="brand"
@@ -280,7 +291,6 @@ function Studio() {
         </span>
       </header>
 
-      {/* Hero section */}
       <section className="hero">
         <span className="eyebrow">
           YOUR VISION. YOUR POSTER.
@@ -297,9 +307,7 @@ function Studio() {
         </p>
       </section>
 
-      {/* Main workspace */}
       <section className="workspace">
-        {/* Editor panel */}
         <aside className="editor panel">
           <div className="panel-heading">
             <div>
@@ -321,7 +329,6 @@ function Studio() {
             </button>
           </div>
 
-          {/* Image upload */}
           <button
             type="button"
             className="upload-zone"
@@ -352,7 +359,6 @@ function Studio() {
             }}
           />
 
-          {/* Metadata search */}
           <form
             className="metadata-search"
             onSubmit={findDetails}
@@ -362,6 +368,7 @@ function Studio() {
 
               <select
                 value={kind}
+                disabled={loading}
                 onChange={(event) => {
                   setKind(event.target.value as MediaKind);
                   setMetadata(null);
@@ -409,7 +416,6 @@ function Studio() {
             </button>
           </form>
 
-          {/* Metadata source and rating */}
           {metadata && (
             <div className="source-card">
               <strong>
@@ -432,7 +438,6 @@ function Studio() {
             </div>
           )}
 
-          {/* Editable poster details */}
           <label className="field">
             <span>POSTER TITLE</span>
 
@@ -474,7 +479,7 @@ function Studio() {
           </label>
 
           <label className="field">
-            <span>RATING (WITH SOURCE IN PANEL ABOVE)</span>
+            <span>RATING (SOURCE SHOWN ON POSTER)</span>
 
             <input
               value={poster.rating}
@@ -499,6 +504,19 @@ function Studio() {
             />
           </label>
 
+          <label className="field">
+            <span>EPISODES</span>
+
+            <input
+              value={poster.episodes}
+              maxLength={40}
+              onChange={(event) =>
+                updatePoster("episodes", event.target.value)
+              }
+              placeholder="363 episodes"
+            />
+          </label>
+
           <div className="field-row">
             <label className="field">
               <span>STATUS</span>
@@ -514,7 +532,7 @@ function Studio() {
             </label>
 
             <label className="field">
-              <span>SEASONS / EPISODES</span>
+              <span>SEASONS</span>
 
               <input
                 value={poster.seasons}
@@ -557,7 +575,6 @@ function Studio() {
             </div>
           </label>
 
-          {/* Export */}
           <button
             type="button"
             className="primary-button"
@@ -582,7 +599,6 @@ function Studio() {
           </p>
         </aside>
 
-        {/* Preview panel */}
         <section className="preview-panel panel">
           <div className="panel-heading">
             <div>
@@ -638,7 +654,6 @@ function Studio() {
         </section>
       </section>
 
-      {/* Footer */}
       <footer>
         <span>FRAMEFORGE STUDIO</span>
         <span>MADE FOR YOUR IMAGINATION</span>
