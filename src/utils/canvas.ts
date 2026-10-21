@@ -1,363 +1,139 @@
-export interface CanvasPosterOptions {
-  image: string | null;
-  title: string;
-  subtitle: string;
-  description: string;
-  accent: string;
-  rating: string;
-  genres: string;
-  status: string;
-  seasons: string;
-  language: string;
-  year?: string;
-}
+import { OverlaySettings } from '../types';
 
-function loadImage( source: string, ): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
+export async function exportTo4KCanvas(
+  imageElement: HTMLImageElement | null,
+  settings: OverlaySettings
+): Promise<string> {
+  const canvas = document.createElement('canvas');
+  canvas.width = 3840;
+  canvas.height = 2160;
+  const ctx = canvas.getContext('2d');
 
-    image.onload = () => resolve(image);
+  if (!ctx) {
+    throw new Error('Could not get canvas context');
+  }
 
-    image.onerror = () =>
-      reject(
-        new Error("Could not load the selected image."),
-      );
+  if (imageElement) {
+    const imgRatio = imageElement.width / imageElement.height;
+    const canvasRatio = canvas.width / canvas.height;
+    let drawWidth = canvas.width;
+    let drawHeight = canvas.height;
+    let offsetX = 0;
+    let offsetY = 0;
 
-    image.src = source;
-  });
-}
-
-function wrapText( context: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number, ): string[] {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let line = "";
-
-  for (const word of words) {
-    const candidate = line
-      ? `${line} ${word}`
-      : word;
-
-    if (
-      context.measureText(candidate).width > maxWidth &&
-      line
-    ) {
-      lines.push(line);
-      line = word;
-
-      if (lines.length >= maxLines) {
-        break;
-      }
+    if (imgRatio > canvasRatio) {
+      drawWidth = canvas.height * imgRatio;
+      offsetX = (canvas.width - drawWidth) / 2;
     } else {
-      line = candidate;
+      drawHeight = canvas.width / imgRatio;
+      offsetY = (canvas.height - drawHeight) / 2;
     }
-  }
 
-  if (line && lines.length < maxLines) {
-    lines.push(line);
-  }
-
-  if (
-    lines.length === maxLines &&
-    words.length &&
-    lines[maxLines - 1]
-  ) {
-    const last = lines[maxLines - 1];
-
-    if (
-      context.measureText(`${last}…`).width <= maxWidth
-    ) {
-      lines[maxLines - 1] = `${last}…`;
-    }
-  }
-
-  return lines;
-}
-
-export async function drawPoster( canvas: HTMLCanvasElement, options: CanvasPosterOptions, export4k = false, ): Promise<void> {
-  const width = export4k ? 3840 : 1200;
-  const height = export4k ? 2160 : 675;
-
-  canvas.width = width;
-  canvas.height = height;
-
-  const context = canvas.getContext("2d");
-
-  if (!context) {
-    throw new Error(
-      "Canvas is not supported by this browser.",
-    );
-  }
-
-  const scale = width / 1200;
-
-  // Base background.
-  context.fillStyle = "#100e19";
-  context.fillRect(0, 0, width, height);
-
-  // Draw uploaded artwork.
-  if (options.image) {
-    try {
-      const image = await loadImage(options.image);
-
-      const imageX = width * 0.36;
-      const imageY = 0;
-      const imageW = width * 0.64;
-      const imageH = height;
-
-      const ratio = Math.max(
-        imageW / image.width,
-        imageH / image.height,
-      );
-
-      const drawW = image.width * ratio;
-      const drawH = image.height * ratio;
-
-      context.save();
-
-      context.beginPath();
-      context.rect(
-        imageX,
-        imageY,
-        imageW,
-        imageH,
-      );
-      context.clip();
-
-      context.drawImage(
-        image,
-        imageX + (imageW - drawW) / 2,
-        imageY + (imageH - drawH) / 2,
-        drawW,
-        drawH,
-      );
-
-      context.restore();
-    } catch {
-      // If the image cannot be decoded, retain the designed background.
-    }
+    ctx.drawImage(imageElement, offsetX, offsetY, drawWidth, drawHeight);
   } else {
-    const background = context.createLinearGradient(
-      0,
-      0,
-      width,
-      height,
-    );
-
-    background.addColorStop(0, "#302044");
-    background.addColorStop(0.55, "#171321");
-    background.addColorStop(1, "#100e19");
-
-    context.fillStyle = background;
-    context.fillRect(0, 0, width, height);
+    ctx.fillStyle = '#090d16';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
-  // Dark gradient behind text.
-  const fade = context.createLinearGradient(
-    width * 0.2,
-    0,
-    width * 0.83,
-    0,
-  );
-
-  fade.addColorStop(0, "#100e19");
-  fade.addColorStop(0.48, "#100e19f2");
-  fade.addColorStop(1, "#100e1900");
-
-  context.fillStyle = fade;
-  context.fillRect(0, 0, width, height);
-
-  // Accent stripe.
-  context.fillStyle = options.accent;
-  context.fillRect(0, 0, 12 * scale, height);
-
-  const left = 62 * scale;
-  const maxTextWidth = width * 0.59;
-
-  context.textAlign = "left";
-
-  // Language and year.
-  context.fillStyle = options.accent;
-  context.font = `800 ${17 * scale}px Arial, sans-serif`;
-
-  const kicker =
-    [options.language, options.year]
-      .filter(Boolean)
-      .join(" • ") || "FRAMEFORGE ORIGINAL";
-
-  context.fillText(
-    kicker.toUpperCase().slice(0, 55),
-    left,
-    height * 0.22,
-  );
-
-  // Title.
-  let titleSize = 76 * scale;
-
-  context.font =
-    `900 ${titleSize}px Impact, Anton, Arial, sans-serif`;
-
-  while (
-    context.measureText(
-      options.title || "YOUR TITLE",
-    ).width > maxTextWidth &&
-    titleSize > 28 * scale
-  ) {
-    titleSize -= 3 * scale;
-
-    context.font =
-      `900 ${titleSize}px Impact, Anton, Arial, sans-serif`;
+  const opacityVal = settings.opacity / 100;
+  
+  if (settings.overlayStyle === 'cinematic') {
+    const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    grad.addColorStop(0, `rgba(9, 13, 22, ${opacityVal * 0.4})`);
+    grad.addColorStop(0.5, `rgba(9, 13, 22, ${opacityVal * 0.7})`);
+    grad.addColorStop(1, `rgba(5, 7, 12, ${Math.min(1, opacityVal * 1.2)})`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  } else if (settings.overlayStyle === 'cyberpunk') {
+    ctx.fillStyle = `rgba(15, 5, 30, ${opacityVal})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = settings.accentColor || '#38bdf8';
+    ctx.lineWidth = 12;
+    ctx.strokeRect(80, 80, canvas.width - 160, canvas.height - 160);
+  } else if (settings.overlayStyle === 'glass') {
+    ctx.fillStyle = `rgba(15, 23, 42, ${opacityVal * 0.85})`;
+    ctx.fillRect(160, canvas.height - 750, canvas.width - 320, 540);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(160, canvas.height - 750, canvas.width - 320, 540);
+  } else {
+    ctx.fillStyle = `rgba(0, 0, 0, ${opacityVal * 0.6})`;
+    ctx.fillRect(0, canvas.height - 600, canvas.width, 600);
   }
 
-  context.fillStyle = "#ffffff";
+  let fontFamily = 'Inter';
+  if (settings.fontFamily === 'Outfit') fontFamily = 'Outfit';
+  if (settings.fontFamily === 'Cinzel') fontFamily = 'Cinzel';
+  if (settings.fontFamily === 'Orbitron') fontFamily = 'Orbitron';
 
-  const titleLines = wrapText(
-    context,
-    options.title || "YOUR TITLE",
-    maxTextWidth,
-    2,
-  );
+  ctx.save();
 
-  titleLines.forEach((line, index) => {
-    context.fillText(
-      line,
-      left,
-      height * 0.38 + index * titleSize * 1.04,
-    );
-  });
+  if (settings.rating) {
+    ctx.font = `700 48px "${fontFamily}", sans-serif`;
+    const ratingText = `★ ${settings.rating}`;
+    const textMetrics = ctx.measureText(ratingText);
+    const badgeWidth = textMetrics.width + 60;
+    const badgeHeight = 90;
+    const badgeX = 240;
+    const badgeY = canvas.height - 620;
 
-  // Subtitle.
-  context.fillStyle = options.accent;
-  context.font = `800 ${22 * scale}px Arial, sans-serif`;
+    ctx.fillStyle = settings.accentColor || '#6366f1';
+    ctx.beginPath();
+    ctx.roundRect(badgeX, badgeY, badgeWidth, badgeHeight, 20);
+    ctx.fill();
 
-  context.fillText(
-    (
-      options.subtitle || "A CINEMATIC STORY"
-    ).slice(0, 70).toUpperCase(),
-    left,
-    height * 0.58,
-  );
-
-  // Rating badge.
-  if (options.rating.trim()) {
-    context.fillStyle = "#171020";
-
-    context.beginPath();
-
-    context.roundRect(
-      left,
-      height * 0.64,
-      142 * scale,
-      42 * scale,
-      10 * scale,
-    );
-
-    context.fill();
-
-    context.fillStyle = "#ffffff";
-    context.font = `800 ${17 * scale}px Arial, sans-serif`;
-
-    context.fillText(
-      `★ ${options.rating.slice(0, 12)}`,
-      left + 13 * scale,
-      height * 0.64 + 27 * scale,
-    );
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(ratingText, badgeX + 30, badgeY + 60);
   }
 
-  // Genre, status and seasons.
-  const meta = [
-    options.genres,
-    options.status,
-    options.seasons,
-  ]
-    .filter(Boolean)
-    .join(" • ");
+  let currentXCoord = 240 + (settings.rating ? 300 : 0);
+  if (settings.status) {
+    ctx.font = `600 42px "${fontFamily}", sans-serif`;
+    const statusText = settings.status.toUpperCase();
+    const sMetrics = ctx.measureText(statusText);
+    const sWidth = sMetrics.width + 50;
+    const sHeight = 90;
+    const sY = canvas.height - 620;
 
-  context.fillStyle = "#e5deef";
-  context.font = `600 ${16 * scale}px Arial, sans-serif`;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.beginPath();
+    ctx.roundRect(currentXCoord, sY, sWidth, sHeight, 20);
+    ctx.fill();
 
-  const metaLines = wrapText(
-    context,
-    meta,
-    maxTextWidth,
-    2,
-  );
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillText(statusText, currentXCoord + 25, sY + 58);
+  }
 
-  metaLines.forEach((line, index) => {
-    context.fillText(
-      line,
-      left,
-      height * 0.75 + index * 24 * scale,
-    );
-  });
+  ctx.font = `900 120px "${fontFamily}", sans-serif`;
+  ctx.fillStyle = '#ffffff';
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+  ctx.shadowBlur = 30;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 10;
+  
+  const titleY = canvas.height - 420;
+  ctx.fillText(settings.title || 'FrameForge Masterpiece', 240, titleY);
 
-  // Description.
-  context.fillStyle = "#d1c9df";
-  context.font = `${17 * scale}px Arial, sans-serif`;
+  if (settings.secondaryTitle) {
+    ctx.font = `500 56px "${fontFamily}", sans-serif`;
+    ctx.fillStyle = '#94a3b8';
+    ctx.shadowBlur = 10;
+    ctx.fillText(settings.secondaryTitle, 240, titleY + 85);
+  }
 
-  const descriptionLines = wrapText(
-    context,
-    options.description || "A new adventure begins.",
-    maxTextWidth,
-    3,
-  );
+  if (settings.genres && settings.genres.length > 0) {
+    ctx.font = `600 40px "${fontFamily}", sans-serif`;
+    ctx.fillStyle = settings.accentColor || '#38bdf8';
+    const genreString = settings.genres.slice(0, 4).join('   •   ');
+    ctx.fillText(genreString, 240, canvas.height - 180);
+  }
 
-  descriptionLines.forEach((line, index) => {
-    context.fillText(
-      line,
-      left,
-      height * 0.84 + index * 25 * scale,
-    );
-  });
+  ctx.font = `700 36px "Inter", sans-serif`;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+  ctx.textAlign = 'right';
+  ctx.fillText('3840 × 2160 • FRAMEFORGE 4K ULTRA', canvas.width - 240, canvas.height - 180);
 
-  // Footer watermark.
-  context.fillStyle = "#ffffffaa";
-  context.font = `700 ${12 * scale}px Arial, sans-serif`;
+  ctx.restore();
 
-  context.fillText(
-    "FRAMEFORGE • ANIME & MOVIE STUDIO",
-    left,
-    height * 0.95,
-  );
+  return canvas.toDataURL('image/png');
 }
-
-export async function exportPosterPng( options: CanvasPosterOptions, ): Promise<void> {
-  const canvas = document.createElement("canvas");
-
-  await drawPoster(canvas, options, true);
-
-  const blob = await new Promise<Blob>(
-    (resolve, reject) => {
-      canvas.toBlob(
-        (value) => {
-          if (value) {
-            resolve(value);
-          } else {
-            reject(new Error("PNG export failed."));
-          }
-        },
-        "image/png",
-      );
-    },
-  );
-
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-
-  const safeTitle =
-    (options.title || "poster")
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "") || "poster";
-
-  link.href = url;
-  link.download = `frameforge-${safeTitle}-4k.png`;
-
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-
-  window.setTimeout(() => {
-    URL.revokeObjectURL(url);
-  }, 1000);
-    }
